@@ -1,0 +1,17 @@
+#### the metadata file consists of filename, sample ID, condition and batch information ####
+
+metadata_filename <- "STI_metadata.xlsx"
+STI <- read_excel(metadata_filename)
+STI$condition <- factor(STI$condition, levels = c("sham", "TBI","InhbTBI"))
+head(STI)
+color_conditions <- c("green3", "red", "royalblue")
+names(color_conditions) <- levels(STI$condition)
+fcs_raw <- read.flowSet(STI$file_name, transformation = FALSE, truncate_max_range = FALSE)
+panel_fcs <- pData(parameters(fcs_raw[[1]]))
+panel_filename <- "STI_panel.xlsx"
+panel <- read_excel(panel_filename)
+head(data.frame(panel))
+lineage_markers <- panel$antigen[panel$lineage == 1]
+functional_markers <- panel$antigen[panel$functional == 1]
+all(lineage_markers %in% panel_fcs$desc)
+all(functional_markers %in% panel_fcs$desc)
