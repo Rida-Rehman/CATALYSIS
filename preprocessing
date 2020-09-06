@@ -1,0 +1,75 @@
+#### arcsinh transofrmation ####
+
+fcs <- fsApply(fcs_raw, function(x, cofactor = 5){
+  colnames(x) <- panel_fcs$desc
+  expr <- exprs(x)
+  expr <- asinh(expr[, c(lineage_markers, functional_markers)] / cofactor)
+  exprs(x) <- expr
+  x
+})
+fcs
+
+#### creating matrix for marker expression ####
+
+expr <- fsApply(fcs, exprs)
+dim(expr)
+
+#### scaling marker expression between 0 and 1 #####
+
+library(matrixStats)
+rng <- colQuantiles(expr, probs = c(0.01, 0.99))
+expr01 <- t((t(expr) - rng[, 1]) / (rng[, 2] - rng[, 1]))
+expr01[expr01 < 0] <- 0
+expr01[expr01 > 1] <- 1
+
+#### verification of batch effect, distribution abnormalities or problems with acquisition ####
+
+##using expr01 is important because scaled
+
+## Generate sample IDs corresponding to each cell in the `expr` matrix
+sample_ids <- rep(STI$sample_id, fsApply(fcs_raw, nrow))
+
+library(ggplot2)
+library(reshape2)
+
+ggdf <- data.frame(sample_id = sample_ids, expr01)
+ggdf <- melt(ggdf, id.var = "sample_id", 
+             value.name = "expression", variable.name = "antigen")
+mm <- match(ggdf$sample_id, STI$sample_id)
+ggdf$condition <- STI$condition[mm]
+
+ggplot(ggdf, aes(x = expression, color = condition, 
+                 group = sample_id)) +
+  geom_density() +
+  facet_wrap(~ antigen, nrow = 4, scales = "free") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), 
+        strip.text = element_text(size = 7), axis.text = element_text(size = 5)) +
+  guides(color = guide_legend(ncol = 1)) +
+  scale_color_manual(values = color_conditions)
+
+
+#### MDS plot ####
+library(dplyr)
+
+expr_median_sample_tbl <- data.frame(sample_id = sample_ids, expr) %>%
+  group_by(sample_id) %>% 
+  summarize_all(funs(median))
+
+expr_median_sample <- t(expr_median_sample_tbl[, -1])
+colnames(expr_median_sample) <- expr_median_sample_tbl$sample_id
+
+library(limma)
+mds <- plotMDS(expr_median_sample, plot = FALSE)
+
+library(ggrepel)
+ggdf <- data.frame(MDS1 = mds$x, MDS2 = mds$y, 
+                   sample_id = colnames(expr_median_sample))
+mm <- match(ggdf$sample_id, STI$sample_id)
+ggdf$condition <- STI$condition[mm]
+
+ggplot(ggdf, aes(x = MDS1, y = MDS2, color = condition)) +
+  geom_point(size = 2, alpha = 0.8) +
+  geom_label_repel(aes(label = sample_id)) +
+  theme_bw() +
+  scale_color_manual(values = color_conditions) 
